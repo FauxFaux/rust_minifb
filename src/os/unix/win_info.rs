@@ -2,6 +2,17 @@ use std::mem;
 
 use super::x11_dl::xlib;
 
+
+const KEY_FUNCTION: u8 = 0xFF;
+const KEY_ESC: u8 = 0x1B;
+const Button6: u8 = 6;
+const Button7: u8 = 7;
+
+// window_handler.rs
+const WINDOW_BORDERLESS: u32 = 1 << 1;
+const WINDOW_RESIZE: u32 = 1 << 2;
+const WINDOW_TITLE: u32 = 1 << 3;
+
 #[derive(Default)]
 struct Globals {
     window_count: usize,

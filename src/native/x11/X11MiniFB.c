@@ -9,20 +9,6 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define KEY_FUNCTION 0xFF
-#define KEY_ESC 0x1B
-#define Button6 6
-#define Button7 7
-
-// window_handler.rs
-const uint32_t WINDOW_BORDERLESS = 1 << 1;
-const uint32_t WINDOW_RESIZE = 1 << 2;
-const uint32_t WINDOW_TITLE = 1 << 3;
-
-void mfb_close(void* window_info);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // Needs to match lib.rs enum
 enum CursorStyle {
     CursorStyle_Arrow,
