@@ -36,7 +36,6 @@ extern "C" {
     ) -> *mut c_void;
     fn mfb_set_title(window: *mut c_void, title: *const c_char);
     fn mfb_close(window: *mut c_void);
-    fn mfb_update(window: *mut c_void);
     fn mfb_update_with_buffer(window: *mut c_void, buffer: *const c_uchar);
     fn mfb_set_position(window: *mut c_void, x: i32, y: i32);
     fn mfb_set_key_callback(
@@ -286,7 +285,7 @@ impl Window {
 
         unsafe {
             Self::set_shared_data(self);
-            mfb_update(self.window_handle);
+            mfb_update_with_buffer(self.window_handle, ptr::null());
             mfb_set_key_callback(
                 self.window_handle,
                 mem::transmute(self),
