@@ -4,9 +4,11 @@
     target_os="netbsd",
     target_os="openbsd"))]
 
+extern crate cast;
 extern crate x11_dl;
 
 mod keysym;
+mod win_info;
 
 use self::x11_dl::keysym::*;
 use error::Error;
