@@ -1,27 +1,27 @@
 #![cfg(target_os = "windows")]
 
-extern crate user32;
-extern crate kernel32;
-extern crate winapi;
 extern crate gdi32;
+extern crate kernel32;
 extern crate time;
+extern crate user32;
+extern crate winapi;
 
 const INVALID_ACCEL: usize = 0xffffffff;
 
-use {Scale, Key, KeyRepeat, MouseButton, MouseMode, WindowOptions, InputCallback};
-use key_handler::KeyHandler;
 use error::Error;
+use key_handler::KeyHandler;
 use Result;
-use {CursorStyle, MenuItem, MenuItemHandle, MenuHandle};
-use {MENU_KEY_WIN, MENU_KEY_SHIFT, MENU_KEY_CTRL, MENU_KEY_ALT};
+use {CursorStyle, MenuHandle, MenuItem, MenuItemHandle};
+use {InputCallback, Key, KeyRepeat, MouseButton, MouseMode, Scale, WindowOptions};
+use {MENU_KEY_ALT, MENU_KEY_CTRL, MENU_KEY_SHIFT, MENU_KEY_WIN};
 
-use std::ptr;
-use std::os::windows::ffi::OsStrExt;
+use buffer_helper;
+use mouse_handler;
 use std::ffi::OsStr;
 use std::mem;
 use std::os::raw;
-use mouse_handler;
-use buffer_helper;
+use std::os::windows::ffi::OsStrExt;
+use std::ptr;
 
 //use self::winapi::windef::HWND;
 //use self::winapi::windef::HDC;
@@ -172,11 +172,12 @@ unsafe fn get_window_long(window: winapi::HWND) -> winapi::LONG {
     user32::GetWindowLongW(window, winapi::winuser::GWLP_USERDATA)
 }
 
-unsafe extern "system" fn wnd_proc(window: winapi::HWND,
-                                   msg: winapi::UINT,
-                                   wparam: winapi::WPARAM,
-                                   lparam: winapi::LPARAM)
-                                   -> winapi::LRESULT {
+unsafe extern "system" fn wnd_proc(
+    window: winapi::HWND,
+    msg: winapi::UINT,
+    wparam: winapi::WPARAM,
+    lparam: winapi::LPARAM,
+) -> winapi::LRESULT {
     // This make sure we actually don't do anything before the user data has been setup for the
     // window
 
@@ -217,29 +218,17 @@ unsafe extern "system" fn wnd_proc(window: winapi::HWND,
             char_down(wnd, wparam as u32);
         }
 
-        winapi::winuser::WM_LBUTTONDOWN => {
-            wnd.mouse.state[0] = true
-        }
+        winapi::winuser::WM_LBUTTONDOWN => wnd.mouse.state[0] = true,
 
-        winapi::winuser::WM_LBUTTONUP => {
-            wnd.mouse.state[0] = false
-        }
+        winapi::winuser::WM_LBUTTONUP => wnd.mouse.state[0] = false,
 
-        winapi::winuser::WM_MBUTTONDOWN => {
-            wnd.mouse.state[1] = true
-        }
+        winapi::winuser::WM_MBUTTONDOWN => wnd.mouse.state[1] = true,
 
-        winapi::winuser::WM_MBUTTONUP => {
-            wnd.mouse.state[1] = false
-        }
+        winapi::winuser::WM_MBUTTONUP => wnd.mouse.state[1] = false,
 
-        winapi::winuser::WM_RBUTTONDOWN => {
-            wnd.mouse.state[2] = true
-        }
+        winapi::winuser::WM_RBUTTONDOWN => wnd.mouse.state[2] = true,
 
-        winapi::winuser::WM_RBUTTONUP => {
-            wnd.mouse.state[2] = false
-        }
+        winapi::winuser::WM_RBUTTONUP => wnd.mouse.state[2] = false,
 
         winapi::winuser::WM_CLOSE => {
             wnd.is_open = false;
@@ -264,7 +253,6 @@ unsafe extern "system" fn wnd_proc(window: winapi::HWND,
         }
 
         winapi::winuser::WM_PAINT => {
-
             // if we have nothing to draw here we return the default function
             if wnd.buffer.len() == 0 {
                 return user32::DefWindowProcW(window, msg, wparam, lparam);
@@ -282,19 +270,21 @@ unsafe extern "system" fn wnd_proc(window: winapi::HWND,
             bitmap_info.bmi_colors[1].rgbGreen = 0xff;
             bitmap_info.bmi_colors[2].rgbBlue = 0xff;
 
-            gdi32::StretchDIBits(wnd.dc.unwrap(),
-                                 0,
-                                 0,
-                                 wnd.width * wnd.scale_factor,
-                                 wnd.height * wnd.scale_factor,
-                                 0,
-                                 0,
-                                 wnd.width,
-                                 wnd.height,
-                                 mem::transmute(wnd.buffer.as_ptr()),
-                                 mem::transmute(&bitmap_info),
-                                 winapi::wingdi::DIB_RGB_COLORS,
-                                 winapi::wingdi::SRCCOPY);
+            gdi32::StretchDIBits(
+                wnd.dc.unwrap(),
+                0,
+                0,
+                wnd.width * wnd.scale_factor,
+                wnd.height * wnd.scale_factor,
+                0,
+                0,
+                wnd.width,
+                wnd.height,
+                mem::transmute(wnd.buffer.as_ptr()),
+                mem::transmute(&bitmap_info),
+                winapi::wingdi::DIB_RGB_COLORS,
+                winapi::wingdi::SRCCOPY,
+            );
 
             user32::ValidateRect(window, ptr::null_mut());
 
@@ -312,7 +302,10 @@ pub enum MinifbError {
 }
 
 fn to_wstring(str: &str) -> Vec<u16> {
-    let v: Vec<u16> = OsStr::new(str).encode_wide().chain(Some(0).into_iter()).collect();
+    let v: Vec<u16> = OsStr::new(str)
+        .encode_wide()
+        .chain(Some(0).into_iter())
+        .collect();
     v
 }
 
@@ -337,7 +330,7 @@ pub struct Window {
     dc: Option<HDC>,
     window: Option<HWND>,
     buffer: Vec<u32>,
-    is_open : bool,
+    is_open: bool,
     scale_factor: i32,
     width: i32,
     height: i32,
@@ -359,7 +352,13 @@ extern "system" {
 }
 
 impl Window {
-    fn open_window(name: &str, width: usize, height: usize, opts: WindowOptions, scale_factor: i32) -> Option<HWND> {
+    fn open_window(
+        name: &str,
+        width: usize,
+        height: usize,
+        opts: WindowOptions,
+        scale_factor: i32,
+    ) -> Option<HWND> {
         unsafe {
             let class_name = to_wstring("minifb_window");
             let class = WNDCLASSW {
@@ -378,7 +377,10 @@ impl Window {
             if user32::RegisterClassW(&class) == 0 {
                 // ignore the "Class already exists" error for multiple windows
                 if kernel32::GetLastError() as u32 != 1410 {
-                    println!("Unable to register class, error {}", kernel32::GetLastError() as u32);
+                    println!(
+                        "Unable to register class, error {}",
+                        kernel32::GetLastError() as u32
+                    );
                     return None;
                 }
             }
@@ -393,9 +395,11 @@ impl Window {
                 bottom: new_height as winapi::LONG,
             };
 
-            user32::AdjustWindowRect(&mut rect,
-                                     winapi::WS_POPUP | winapi::WS_SYSMENU | winapi::WS_CAPTION,
-                                     0);
+            user32::AdjustWindowRect(
+                &mut rect,
+                winapi::WS_POPUP | winapi::WS_SYSMENU | winapi::WS_CAPTION,
+                0,
+            );
 
             rect.right -= rect.left;
             rect.bottom -= rect.top;
@@ -409,8 +413,7 @@ impl Window {
             }
 
             if opts.resize {
-                flags |= winapi::WS_THICKFRAME as u32 | winapi::WS_MAXIMIZEBOX as u32 ;
-
+                flags |= winapi::WS_THICKFRAME as u32 | winapi::WS_MAXIMIZEBOX as u32;
             } else {
                 flags &= !winapi::WS_MAXIMIZEBOX;
                 flags &= !winapi::WS_THICKFRAME;
@@ -420,20 +423,25 @@ impl Window {
                 flags &= !winapi::WS_THICKFRAME;
             }
 
-            let handle = user32::CreateWindowExW(0,
-                                                 class_name.as_ptr(),
-                                                 window_name.as_ptr(),
-                                                 flags,
-                                                 winapi::CW_USEDEFAULT,
-                                                 winapi::CW_USEDEFAULT,
-                                                 rect.right,
-                                                 rect.bottom,
-                                                 ptr::null_mut(),
-                                                 ptr::null_mut(),
-                                                 ptr::null_mut(),
-                                                 ptr::null_mut());
+            let handle = user32::CreateWindowExW(
+                0,
+                class_name.as_ptr(),
+                window_name.as_ptr(),
+                flags,
+                winapi::CW_USEDEFAULT,
+                winapi::CW_USEDEFAULT,
+                rect.right,
+                rect.bottom,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
             if handle.is_null() {
-                println!("Unable to create window, error {}", kernel32::GetLastError() as u32);
+                println!(
+                    "Unable to create window, error {}",
+                    kernel32::GetLastError() as u32
+                );
                 return None;
             }
 
@@ -443,11 +451,7 @@ impl Window {
         }
     }
 
-    pub fn new(name: &str,
-               width: usize,
-               height: usize,
-               opts: WindowOptions)
-               -> Result<Window> {
+    pub fn new(name: &str, width: usize, height: usize, opts: WindowOptions) -> Result<Window> {
         unsafe {
             let scale_factor = Self::get_scale_factor(width, height, opts.scale);
 
@@ -503,8 +507,15 @@ impl Window {
     #[inline]
     pub fn set_position(&mut self, x: isize, y: isize) {
         unsafe {
-            user32::SetWindowPos(self.window.unwrap(), ptr::null_mut(), x as i32, y as i32,
-                                 0, 0, winapi::SWP_SHOWWINDOW | winapi::SWP_NOSIZE);
+            user32::SetWindowPos(
+                self.window.unwrap(),
+                ptr::null_mut(),
+                x as i32,
+                y as i32,
+                0,
+                0,
+                winapi::SWP_SHOWWINDOW | winapi::SWP_NOSIZE,
+            );
         }
     }
 
@@ -576,7 +587,7 @@ impl Window {
     }
 
     #[inline]
-    pub fn set_input_callback(&mut self, callback: Box<InputCallback>)  {
+    pub fn set_input_callback(&mut self, callback: Box<InputCallback>) {
         self.key_handler.set_input_callback(callback)
     }
 
@@ -602,7 +613,7 @@ impl Window {
 
     #[inline]
     pub fn is_open(&self) -> bool {
-        return self.is_open
+        return self.is_open;
     }
 
     fn generic_update(&mut self, window: HWND) {
@@ -631,7 +642,9 @@ impl Window {
                     user32::TranslateMessage(&mut msg);
                     user32::DispatchMessageW(&mut msg);
                 } else {
-                    if TranslateAcceleratorW(msg.hwnd, mem::transmute(self.accel_table), &mut msg) == 0 {
+                    if TranslateAcceleratorW(msg.hwnd, mem::transmute(self.accel_table), &mut msg)
+                        == 0
+                    {
                         user32::TranslateMessage(&mut msg);
                         user32::DispatchMessageW(&mut msg);
                     }
@@ -645,10 +658,12 @@ impl Window {
 
         Self::generic_update(self, window);
 
-        let check_res = buffer_helper::check_buffer_size(self.width as usize,
-                                                         self.height as usize,
-                                                         self.scale_factor as usize,
-                                                         buffer);
+        let check_res = buffer_helper::check_buffer_size(
+            self.width as usize,
+            self.height as usize,
+            self.scale_factor as usize,
+            buffer,
+        );
         if check_res.is_err() {
             return check_res;
         }
@@ -718,12 +733,14 @@ impl Window {
         let menu_height = user32::GetSystemMetrics(winapi::winuser::SM_CYMENU);
 
         user32::GetWindowRect(handle, &mut rect);
-        user32::MoveWindow(handle,
-                           rect.left,
-                           rect.top,
-                           rect.right - rect.left,
-                           (rect.bottom - rect.top) + menu_height,
-                           1);
+        user32::MoveWindow(
+            handle,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            (rect.bottom - rect.top) + menu_height,
+            1,
+        );
     }
 
     unsafe fn set_accel_table(&mut self) {
@@ -740,12 +757,13 @@ impl Window {
             user32::DestroyAcceleratorTable(self.accel_table);
         }
 
-        self.accel_table = user32::CreateAcceleratorTableW(temp_accel_table.as_mut_ptr(),
-                                                           temp_accel_table.len() as i32);
+        self.accel_table = user32::CreateAcceleratorTableW(
+            temp_accel_table.as_mut_ptr(),
+            temp_accel_table.len() as i32,
+        );
 
         println!("accel {:?}", self.accel_table);
     }
-
 
     pub fn add_menu(&mut self, menu: &Menu) -> MenuHandle {
         unsafe {
@@ -758,10 +776,12 @@ impl Window {
                 Self::adjust_window_size_for_menu(window);
             }
 
-            user32::AppendMenuW(main_menu,
-                                0x10,
-                                menu.menu_handle as UINT_PTR,
-                                menu.name.as_ptr());
+            user32::AppendMenuW(
+                main_menu,
+                0x10,
+                menu.menu_handle as UINT_PTR,
+                menu.name.as_ptr(),
+            );
 
             self.menus.push(menu.clone());
             // TODO: Setup accel table
@@ -938,14 +958,16 @@ impl Menu {
     pub fn add_sub_menu(&mut self, name: &str, menu: &Menu) {
         unsafe {
             let menu_name = to_wstring(name);
-            user32::AppendMenuW(self.menu_handle,
-                                0x10,
-                                menu.menu_handle as UINT_PTR,
-                                menu_name.as_ptr());
-            self.accel_table.extend_from_slice(menu.accel_table.as_slice());
+            user32::AppendMenuW(
+                self.menu_handle,
+                0x10,
+                menu.menu_handle as UINT_PTR,
+                menu_name.as_ptr(),
+            );
+            self.accel_table
+                .extend_from_slice(menu.accel_table.as_slice());
         }
     }
-
 
     fn format_name(menu_item: &MenuItem, key_name: &'static str) -> String {
         let mut name = menu_item.label.clone();
@@ -1010,7 +1032,8 @@ impl Menu {
         let accel = winuser::ACCEL {
             fVirt: virt as BYTE,
             cmd: menu_item.id as WORD,
-            key: vk_accel.0 as WORD };
+            key: vk_accel.0 as WORD,
+        };
 
         self.accel_table.push(accel);
     }
@@ -1022,12 +1045,22 @@ impl Menu {
             match vk_accel.0 {
                 0 => {
                     let item_name = to_wstring(&menu_item.label);
-                    user32::AppendMenuW(self.menu_handle, 0x10, menu_item.id as UINT_PTR, item_name.as_ptr());
-                },
+                    user32::AppendMenuW(
+                        self.menu_handle,
+                        0x10,
+                        menu_item.id as UINT_PTR,
+                        item_name.as_ptr(),
+                    );
+                }
                 _ => {
                     let menu_name = Self::format_name(menu_item, vk_accel.1);
                     let w_name = to_wstring(&menu_name);
-                    user32::AppendMenuW(self.menu_handle, 0x10, menu_item.id as UINT_PTR, w_name.as_ptr());
+                    user32::AppendMenuW(
+                        self.menu_handle,
+                        0x10,
+                        menu_item.id as UINT_PTR,
+                        w_name.as_ptr(),
+                    );
                     self.add_accel(vk_accel.0, menu_item);
                 }
             }
@@ -1044,7 +1077,6 @@ impl Menu {
         panic!("remove item hasn't been implemented");
     }
 }
-
 
 impl Drop for Window {
     fn drop(&mut self) {

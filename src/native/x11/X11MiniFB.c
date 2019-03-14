@@ -17,9 +17,9 @@
 static long keySym2Unicode(unsigned int keysym);
 
 // window_handler.rs
-const uint32_t WINDOW_BORDERLESS = 1 << 1; 
-const uint32_t WINDOW_RESIZE = 1 << 2; 
-const uint32_t WINDOW_TITLE = 1 << 3; 
+const uint32_t WINDOW_BORDERLESS = 1 << 1;
+const uint32_t WINDOW_RESIZE = 1 << 2;
+const uint32_t WINDOW_TITLE = 1 << 3;
 
 void mfb_close(void* window_info);
 
@@ -86,14 +86,14 @@ typedef struct WindowInfo {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void init_cursors() {
-    s_cursors[CursorStyle_Arrow] = XcursorLibraryLoadCursor(s_display, "arrow"); 
-    s_cursors[CursorStyle_Ibeam] = XcursorLibraryLoadCursor(s_display, "xterm"); 
-    s_cursors[CursorStyle_Crosshair] = XcursorLibraryLoadCursor(s_display, "crosshair"); 
-    s_cursors[CursorStyle_ClosedHand] = XcursorLibraryLoadCursor(s_display, "hand2"); 
-    s_cursors[CursorStyle_OpenHand] = XcursorLibraryLoadCursor(s_display, "hand2"); 
-    s_cursors[CursorStyle_ResizeLeftRight] = XcursorLibraryLoadCursor(s_display, "sb_h_double_arrow"); 
-    s_cursors[CursorStyle_ResizeUpDown] = XcursorLibraryLoadCursor(s_display, "sb_v_double_arrow"); 
-    s_cursors[CursorStyle_SizeAll] = XcursorLibraryLoadCursor(s_display, "diamond_cross"); 
+    s_cursors[CursorStyle_Arrow] = XcursorLibraryLoadCursor(s_display, "arrow");
+    s_cursors[CursorStyle_Ibeam] = XcursorLibraryLoadCursor(s_display, "xterm");
+    s_cursors[CursorStyle_Crosshair] = XcursorLibraryLoadCursor(s_display, "crosshair");
+    s_cursors[CursorStyle_ClosedHand] = XcursorLibraryLoadCursor(s_display, "hand2");
+    s_cursors[CursorStyle_OpenHand] = XcursorLibraryLoadCursor(s_display, "hand2");
+    s_cursors[CursorStyle_ResizeLeftRight] = XcursorLibraryLoadCursor(s_display, "sb_h_double_arrow");
+    s_cursors[CursorStyle_ResizeUpDown] = XcursorLibraryLoadCursor(s_display, "sb_v_double_arrow");
+    s_cursors[CursorStyle_SizeAll] = XcursorLibraryLoadCursor(s_display, "diamond_cross");
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,7 +131,7 @@ static int setup_display() {
             break;
         }
     }
-  
+
     XFree(formats);
 
     // We only support 32-bit right now
@@ -175,7 +175,7 @@ void* mfb_open(const char* title, int width, int height, unsigned int flags, int
         return 0;
     }
 
-    //TODO: Handle no title/borderless 
+    //TODO: Handle no title/borderless
     (void)flags;
 
     width *= scale;
@@ -199,7 +199,7 @@ void* mfb_open(const char* title, int width, int height, unsigned int flags, int
     //XSelectInput(s_display, s_window, KeyPressMask | KeyReleaseMask);
     XStoreName(s_display, window, title);
 
-    XSelectInput(s_display, window, 
+    XSelectInput(s_display, window,
         StructureNotifyMask |
         ButtonPressMask | KeyPressMask | KeyReleaseMask | ButtonReleaseMask);
 
@@ -294,7 +294,7 @@ void mfb_set_cursor_style(void* window_info, int cursor)
 static int handle_special_keys(WindowInfo* info, XEvent* event, int down) {
 	int keySym;
 
-	if (!s_keyb_ext) 
+	if (!s_keyb_ext)
 		return 0;
 
 	keySym = XkbKeycodeToKeysym(s_display, event->xkey.keycode, 0, 1);
@@ -345,7 +345,7 @@ static int process_event(XEvent* event) {
         }
     }
 
-    switch (event->type) 
+    switch (event->type)
     {
         case KeyPress:
         {
@@ -406,7 +406,7 @@ static int process_event(XEvent* event) {
             if (!info->shared_data)
                 break;
 
-            if (event->xbutton.button == Button1) 
+            if (event->xbutton.button == Button1)
                 info->shared_data->state[0] = 0;
             else if (event->xbutton.button == Button2)
                 info->shared_data->state[1] = 0;
@@ -459,7 +459,7 @@ static int process_events()
     {
         XEvent event;
         XNextEvent(s_display, &event);
-        
+
         // Don't process any more messages if event is 0
         if (process_event(&event) == 0)
             return 0;
@@ -703,27 +703,27 @@ void mfb_update_with_buffer(void* window_info, void* buffer)
                 break;
             }
             case 2: {
-                scale_2x(info->draw_buffer, buffer, width, height, scale); 
+                scale_2x(info->draw_buffer, buffer, width, height, scale);
                 break;
             }
 
             case 4: {
-                scale_4x(info->draw_buffer, buffer, width, height, scale); 
+                scale_4x(info->draw_buffer, buffer, width, height, scale);
                 break;
             }
 
             case 8: {
-                scale_8x(info->draw_buffer, buffer, width, height, scale); 
+                scale_8x(info->draw_buffer, buffer, width, height, scale);
                 break;
             }
 
             case 16: {
-                scale_16x(info->draw_buffer, buffer, width, height, scale); 
+                scale_16x(info->draw_buffer, buffer, width, height, scale);
                 break;
             }
 
             case 32: {
-                scale_32x(info->draw_buffer, buffer, width, height, scale); 
+                scale_32x(info->draw_buffer, buffer, width, height, scale);
                 break;
             }
         }
@@ -752,7 +752,7 @@ void mfb_update(void* window_info, void* buffer)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void mfb_set_position(void* window, int x, int y) 
+void mfb_set_position(void* window, int x, int y)
 {
     WindowInfo* info = (WindowInfo*)window;
     XMoveWindow(s_display, info->window, x, y);
@@ -1704,6 +1704,3 @@ static long keySym2Unicode(unsigned int keysym)
     // No matching Unicode value found
     return -1;
 }
-
-
-

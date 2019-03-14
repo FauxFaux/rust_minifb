@@ -6,34 +6,43 @@
 
 extern crate x11_dl;
 
-use {MouseMode, MouseButton, Scale, Key, KeyRepeat, WindowOptions, InputCallback};
-use key_handler::KeyHandler;
 use self::x11_dl::keysym::*;
 use error::Error;
+use key_handler::KeyHandler;
 use Result;
-use {CursorStyle, MenuItem, MenuItemHandle, MenuHandle, UnixMenu, UnixMenuItem};
+use {CursorStyle, MenuHandle, MenuItem, MenuItemHandle, UnixMenu, UnixMenuItem};
+use {InputCallback, Key, KeyRepeat, MouseButton, MouseMode, Scale, WindowOptions};
 
-use std::os::raw::{c_void, c_char, c_uchar};
-use std::ffi::{CString};
-use std::ptr;
+use buffer_helper;
+use mouse_handler;
+use std::ffi::CString;
 use std::mem;
 use std::os::raw;
-use mouse_handler;
-use buffer_helper;
+use std::os::raw::{c_char, c_uchar, c_void};
+use std::ptr;
 use window_flags;
 
 #[link(name = "X11")]
 #[link(name = "Xcursor")]
-extern {
-    fn mfb_open(name: *const c_char, width: u32, height: u32, flags: u32, scale: i32) -> *mut c_void;
+extern "C" {
+    fn mfb_open(
+        name: *const c_char,
+        width: u32,
+        height: u32,
+        flags: u32,
+        scale: i32,
+    ) -> *mut c_void;
     fn mfb_set_title(window: *mut c_void, title: *const c_char);
     fn mfb_close(window: *mut c_void);
     fn mfb_update(window: *mut c_void);
     fn mfb_update_with_buffer(window: *mut c_void, buffer: *const c_uchar);
     fn mfb_set_position(window: *mut c_void, x: i32, y: i32);
-    fn mfb_set_key_callback(window: *mut c_void, target: *mut c_void,
-    						kb: unsafe extern fn(*mut c_void, i32, i32),
-    						cb: unsafe extern fn(*mut c_void, u32));
+    fn mfb_set_key_callback(
+        window: *mut c_void,
+        target: *mut c_void,
+        kb: unsafe extern "C" fn(*mut c_void, i32, i32),
+        cb: unsafe extern "C" fn(*mut c_void, u32),
+    );
     fn mfb_set_shared_data(window: *mut c_void, target: *mut SharedData);
     fn mfb_should_close(window: *mut c_void) -> i32;
     fn mfb_get_screen_size() -> u32;
@@ -170,7 +179,7 @@ unsafe extern "C" fn key_callback(window: *mut c_void, key: i32, s: i32) {
         XK_KP_Enter => (*win).key_handler.set_key_state(Key::NumPadEnter, state),
         XK_Super_L => (*win).key_handler.set_key_state(Key::LeftSuper, state),
         XK_Super_R => (*win).key_handler.set_key_state(Key::RightSuper, state),
-    	_ => (),
+        _ => (),
     }
 }
 
@@ -198,12 +207,14 @@ impl Window {
         };
 
         unsafe {
-        	let scale = Self::get_scale_factor(width, height, opts.scale);
-            let handle = mfb_open(n.as_ptr(),
-            					  width as u32,
-            					  height as u32,
-            					  window_flags::get_flags(opts),
-            					  scale);
+            let scale = Self::get_scale_factor(width, height, opts.scale);
+            let handle = mfb_open(
+                n.as_ptr(),
+                width as u32,
+                height as u32,
+                window_flags::get_flags(opts),
+                scale,
+            );
 
             if handle == ptr::null_mut() {
                 return Err(Error::WindowCreate("Unable to open Window".to_owned()));
@@ -212,9 +223,9 @@ impl Window {
             Ok(Window {
                 window_handle: handle,
                 shared_data: SharedData {
-                	scale: scale as f32,
-                	.. SharedData::default()
-				},
+                    scale: scale as f32,
+                    ..SharedData::default()
+                },
                 key_handler: KeyHandler::new(),
                 menu_counter: MenuHandle(0),
                 menus: Vec::new(),
@@ -240,20 +251,24 @@ impl Window {
             Self::set_shared_data(self);
         }
 
-        let check_res = buffer_helper::check_buffer_size(self.shared_data.width as usize,
-                                                         self.shared_data.height as usize,
-                                                         self.shared_data.scale as usize,
-                                                         buffer);
+        let check_res = buffer_helper::check_buffer_size(
+            self.shared_data.width as usize,
+            self.shared_data.height as usize,
+            self.shared_data.scale as usize,
+            buffer,
+        );
         if check_res.is_err() {
             return check_res;
         }
 
         unsafe {
             mfb_update_with_buffer(self.window_handle, buffer.as_ptr() as *const u8);
-            mfb_set_key_callback(self.window_handle,
-            					 mem::transmute(self),
-            					 key_callback,
-            					 char_callback);
+            mfb_set_key_callback(
+                self.window_handle,
+                mem::transmute(self),
+                key_callback,
+                char_callback,
+            );
         }
 
         Ok(())
@@ -265,16 +280,18 @@ impl Window {
         unsafe {
             Self::set_shared_data(self);
             mfb_update(self.window_handle);
-            mfb_set_key_callback(self.window_handle,
-            					 mem::transmute(self),
-            					 key_callback,
-            					 char_callback);
+            mfb_set_key_callback(
+                self.window_handle,
+                mem::transmute(self),
+                key_callback,
+                char_callback,
+            );
         }
     }
 
     #[inline]
     pub fn get_window_handle(&self) -> *mut raw::c_void {
-    	unsafe { mfb_get_window_handle(self.window_handle) as *mut raw::c_void }
+        unsafe { mfb_get_window_handle(self.window_handle) as *mut raw::c_void }
     }
 
     #[inline]
@@ -284,7 +301,10 @@ impl Window {
 
     #[inline]
     pub fn get_size(&self) -> (usize, usize) {
-        (self.shared_data.width as usize, self.shared_data.height as usize)
+        (
+            self.shared_data.width as usize,
+            self.shared_data.height as usize,
+        )
     }
 
     pub fn get_mouse_pos(&self, mode: MouseMode) -> Option<(f32, f32)> {
@@ -292,27 +312,40 @@ impl Window {
         let w = self.shared_data.width as f32;
         let h = self.shared_data.height as f32;
 
-        mouse_handler::get_pos(mode, self.shared_data.mouse_x, self.shared_data.mouse_y, s, w, h)
+        mouse_handler::get_pos(
+            mode,
+            self.shared_data.mouse_x,
+            self.shared_data.mouse_y,
+            s,
+            w,
+            h,
+        )
     }
 
     pub fn get_unscaled_mouse_pos(&self, mode: MouseMode) -> Option<(f32, f32)> {
         let w = self.shared_data.width as f32;
         let h = self.shared_data.height as f32;
 
-        mouse_handler::get_pos(mode, self.shared_data.mouse_x, self.shared_data.mouse_y, 1.0, w, h)
+        mouse_handler::get_pos(
+            mode,
+            self.shared_data.mouse_x,
+            self.shared_data.mouse_y,
+            1.0,
+            w,
+            h,
+        )
     }
 
     pub fn get_mouse_down(&self, button: MouseButton) -> bool {
-    	match button {
-    		MouseButton::Left => self.shared_data.state[0] > 0,
-    		MouseButton::Middle => self.shared_data.state[1] > 0,
-    		MouseButton::Right => self.shared_data.state[2] > 0,
-    	}
+        match button {
+            MouseButton::Left => self.shared_data.state[0] > 0,
+            MouseButton::Middle => self.shared_data.state[1] > 0,
+            MouseButton::Right => self.shared_data.state[2] > 0,
+        }
     }
 
     pub fn get_scroll_wheel(&self) -> Option<(f32, f32)> {
-        if self.shared_data.scroll_x.abs() > 0.0 ||
-           self.shared_data.scroll_y.abs() > 0.0 {
+        if self.shared_data.scroll_x.abs() > 0.0 || self.shared_data.scroll_y.abs() > 0.0 {
             Some((self.shared_data.scroll_x, self.shared_data.scroll_y))
         } else {
             None
@@ -362,7 +395,7 @@ impl Window {
     }
 
     #[inline]
-    pub fn set_input_callback(&mut self, callback: Box<InputCallback>)  {
+    pub fn set_input_callback(&mut self, callback: Box<InputCallback>) {
         self.key_handler.set_input_callback(callback)
     }
 
@@ -406,10 +439,10 @@ impl Window {
                 }
 
                 if scale >= 32 {
-                	32
+                    32
                 } else {
-                	scale
-				}
+                    scale
+                }
             }
         };
 
@@ -417,13 +450,13 @@ impl Window {
     }
 
     fn next_menu_handle(&mut self) -> MenuHandle {
-    	let handle = self.menu_counter;
-    	self.menu_counter.0 += 1;
-    	handle
+        let handle = self.menu_counter;
+        self.menu_counter.0 += 1;
+        handle
     }
 
     pub fn add_menu(&mut self, menu: &Menu) -> MenuHandle {
-    	let handle = self.next_menu_handle();
+        let handle = self.next_menu_handle();
         let mut menu = menu.internal.clone();
         menu.handle = handle;
         self.menus.push(menu);
@@ -444,59 +477,60 @@ impl Window {
 }
 
 pub struct Menu {
-	pub internal: UnixMenu,
+    pub internal: UnixMenu,
 }
 
 impl Menu {
     pub fn new(name: &str) -> Result<Menu> {
-    	Ok(Menu {
-    		internal: UnixMenu {
-				handle: MenuHandle(0),
-				item_counter: MenuItemHandle(0),
-				name: name.to_owned(),
-				items: Vec::new(),
-    		}
-    	})
+        Ok(Menu {
+            internal: UnixMenu {
+                handle: MenuHandle(0),
+                item_counter: MenuItemHandle(0),
+                name: name.to_owned(),
+                items: Vec::new(),
+            },
+        })
     }
 
     pub fn add_sub_menu(&mut self, name: &str, sub_menu: &Menu) {
-    	let handle = self.next_item_handle();
-    	self.internal.items.push(UnixMenuItem {
-    	    label: name.to_owned(),
-    	    handle: handle,
-    	    sub_menu: Some(Box::new(sub_menu.internal.clone())),
-			id: 0,
-			enabled: true,
-			key: Key::Unknown,
-			modifier: 0,
+        let handle = self.next_item_handle();
+        self.internal.items.push(UnixMenuItem {
+            label: name.to_owned(),
+            handle: handle,
+            sub_menu: Some(Box::new(sub_menu.internal.clone())),
+            id: 0,
+            enabled: true,
+            key: Key::Unknown,
+            modifier: 0,
         });
     }
 
     fn next_item_handle(&mut self) -> MenuItemHandle {
-    	let handle = self.internal.item_counter;
-    	self.internal.item_counter.0 += 1;
-    	handle
+        let handle = self.internal.item_counter;
+        self.internal.item_counter.0 += 1;
+        handle
     }
 
     pub fn add_menu_item(&mut self, item: &MenuItem) -> MenuItemHandle {
-    	let item_handle = self.next_item_handle();
-    	self.internal.items.push(UnixMenuItem {
-			sub_menu: None,
-			handle: self.internal.item_counter,
-			id: item.id,
-			label: item.label.clone(),
-			enabled: item.enabled,
-			key: item.key,
-			modifier: item.modifier,
-    	});
-    	item_handle
+        let item_handle = self.next_item_handle();
+        self.internal.items.push(UnixMenuItem {
+            sub_menu: None,
+            handle: self.internal.item_counter,
+            id: item.id,
+            label: item.label.clone(),
+            enabled: item.enabled,
+            key: item.key,
+            modifier: item.modifier,
+        });
+        item_handle
     }
 
     pub fn remove_item(&mut self, handle: &MenuItemHandle) {
-        self.internal.items.retain(|ref item| item.handle.0 != handle.0);
+        self.internal
+            .items
+            .retain(|ref item| item.handle.0 != handle.0);
     }
 }
-
 
 impl Drop for Window {
     fn drop(&mut self) {
@@ -505,4 +539,3 @@ impl Drop for Window {
         }
     }
 }
-

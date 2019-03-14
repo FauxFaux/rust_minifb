@@ -9,4 +9,3 @@ typedef struct SharedData {
     float scroll_y;
     unsigned char mouse_state[8];
 } SharedData;
-
