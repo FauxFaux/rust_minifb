@@ -6,6 +6,8 @@
 
 extern crate x11_dl;
 
+mod keysym;
+
 use self::x11_dl::keysym::*;
 use error::Error;
 use key_handler::KeyHandler;
@@ -183,8 +185,13 @@ unsafe extern "C" fn key_callback(window: *mut c_void, key: i32, s: i32) {
     }
 }
 
-unsafe extern "C" fn char_callback(window: *mut c_void, code_point: u32) {
+unsafe extern "C" fn char_callback(window: *mut c_void, keysym: u32) {
     let win: *mut Window = mem::transmute(window);
+
+    let code_point = match keysym::key_sym_to_ucs(keysym) {
+        Some(code_point) => code_point,
+        None => return,
+    };
 
     // Taken from GLFW
     if code_point < 32 || (code_point > 126 && code_point < 160) {
